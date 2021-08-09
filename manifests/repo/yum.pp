@@ -4,7 +4,8 @@ class mongodb::repo::yum inherits mongodb::repo {
   # http://docs.mongodb.org/manual/tutorial/install-mongodb-on-red-hat-centos-or-fedora-linux/
 
   if $mongodb::repo::ensure == 'present' or $mongodb::repo::ensure == true {
-    yumrepo { $mongodb::repo::namever:
+    yumrepo { 'mongodb':
+      name           => $mongodb::repo::namever,
       descr          => $mongodb::repo::description,
       baseurl        => $mongodb::repo::location,
       gpgcheck       => '1',
@@ -19,6 +20,7 @@ class mongodb::repo::yum inherits mongodb::repo {
   else {
     yumrepo { 'mongodb':
       ensure => absent,
+      name   => $mongodb::repo::namever,
     }
   }
 }
