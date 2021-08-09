@@ -16,7 +16,7 @@ class mongodb::server (
   Boolean $service_enable                                       = $mongodb::params::service_enable,
   Enum['stopped', 'running'] $service_ensure                    = $mongodb::params::service_ensure,
   Optional[Enum['stopped', 'running']] $service_status          = $mongodb::params::service_status,
-  Variant[Boolean, String] $package_ensure                      = $mongodb::params::package_ensure,
+  Variant[Boolean, String] $package_ensure                      = $mongodb::globals::server_package_ensure,
   String $package_name                                          = $mongodb::params::server_package_name,
   Variant[Boolean, Stdlib::Absolutepath] $logpath               = $mongodb::params::logpath,
   Array[Stdlib::Compat::Ip_address] $bind_ip                    = $mongodb::params::bind_ip,
