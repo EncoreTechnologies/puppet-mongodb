@@ -5,9 +5,11 @@ class mongodb::repo::yum inherits mongodb::repo {
 
   if $mongodb::repo::ensure == 'present' or $mongodb::repo::ensure == true {
     yumrepo { 'mongodb':
+      name           => $mongodb::repo::namever,
       descr          => $mongodb::repo::description,
       baseurl        => $mongodb::repo::location,
-      gpgcheck       => '0',
+      gpgcheck       => '1',
+      gpgkey         => $mongodb::repo::gpgkey,
       enabled        => '1',
       proxy          => $mongodb::repo::proxy,
       proxy_username => $mongodb::repo::proxy_username,
@@ -18,6 +20,7 @@ class mongodb::repo::yum inherits mongodb::repo {
   else {
     yumrepo { 'mongodb':
       ensure => absent,
+      name   => $mongodb::repo::namever,
     }
   }
 }

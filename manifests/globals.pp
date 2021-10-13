@@ -2,7 +2,13 @@
 # details.
 class mongodb::globals (
   $server_package_name   = undef,
+  # NOTE: To specify a version number, must include full version (ex. '4.2.15-1.el8'), this
+  #       may cause issues across OS releases. Recommend only ['present','absent','latest'].
+  $server_package_ensure = present,
   $client_package_name   = undef,
+  # NOTE: To specify a version number, must include full version (ex. '4.2.15-1.el8'), this
+  #       may cause issues across OS releases. Recommend only ['present','absent','latest'].
+  $client_package_ensure = present,
 
   $mongod_service_manage = undef,
   $service_enable        = undef,

@@ -30,10 +30,10 @@ class mongodb::params inherits mongodb::globals {
   $config_data           = undef
 
   if $version {
-    $package_ensure        = $version
+    #$package_ensure        = $version
     $package_ensure_mongos = $version
   } else {
-    $package_ensure        = true
+    #$package_ensure        = true
     $package_ensure_mongos = true
   }
 

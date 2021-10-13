@@ -25,6 +25,8 @@ class mongodb::repo (
           $location = "https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/${mongover[0]}.${mongover[1]}/\$basearch/"
           $description = 'MongoDB Repository'
         }
+        $gpgkey = "https://www.mongodb.org/static/pgp/server-${mongover[0]}.${mongover[1]}.asc"
+        $namever = "mongodb-org-${mongover[0]}.${mongover[1]}"
       }
 
       contain mongodb::repo::yum
