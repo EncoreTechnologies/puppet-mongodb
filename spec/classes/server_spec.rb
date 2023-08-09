@@ -1,16 +1,21 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'mongodb::server' do
   shared_examples 'server classes' do
     it { is_expected.to compile.with_all_deps }
+
     it {
       is_expected.to contain_class('mongodb::server::install').
         that_comes_before('Class[mongodb::server::config]')
     }
+
     it {
       is_expected.to contain_class('mongodb::server::config').
         that_notifies('Class[mongodb::server::service]')
     }
+
     it { is_expected.to contain_class('mongodb::server::service') }
   end
 
@@ -20,7 +25,11 @@ describe 'mongodb::server' do
 
       let(:config_file) do
         if facts[:os]['family'] == 'Debian'
-          '/etc/mongodb.conf'
+          if facts[:os]['release']['major'] =~ %r{(10)}
+            '/etc/mongod.conf'
+          else
+            '/etc/mongodb.conf'
+          end
         else
           '/etc/mongod.conf'
         end
@@ -37,7 +46,13 @@ describe 'mongodb::server' do
       describe 'with defaults' do
         it_behaves_like 'server classes'
 
-        it { is_expected.to contain_package('mongodb_server').with_ensure('present').with_name('mongodb-server').with_tag('mongodb_package') }
+        if facts[:os]['family'] == 'RedHat' || facts[:os]['family'] == 'Suse'
+          it { is_expected.to contain_package('mongodb_server').with_ensure('present').with_name('mongodb-org-server').with_tag('mongodb_package') }
+        elsif facts[:os]['release']['major'] =~ %r{(10)}
+          it { is_expected.to contain_package('mongodb_server').with_ensure('4.4.8').with_name('mongodb-org-server').with_tag('mongodb_package') }
+        else
+          it { is_expected.to contain_package('mongodb_server').with_ensure('present').with_name('mongodb-server').with_tag('mongodb_package') }
+        end
 
         it do
           is_expected.to contain_file(config_file).
@@ -89,6 +104,7 @@ describe 'mongodb::server' do
                           readWriteAnyDatabase userAdminAnyDatabase clusterAdmin clusterManager
                           clusterMonitor hostManager root restore])
         end
+
         it { is_expected.to contain_mongodb_database('admin').that_requires('Service[mongodb]') }
       end
 
@@ -126,7 +142,7 @@ describe 'mongodb::server' do
 
         it do
           is_expected.to contain_file(config_file).
-            with_content(%r{^net\.bindIp:  127\.0\.0\.1\,fd00:beef:dead:55::143$}).
+            with_content(%r{^net\.bindIp:  127\.0\.0\.1,fd00:beef:dead:55::143$}).
             with_content(%r{^net\.ipv6: true$})
         end
       end
@@ -138,7 +154,7 @@ describe 'mongodb::server' do
           }
         end
 
-        it { is_expected.to contain_file(config_file).with_content(%r{^net\.bindIp:  127\.0\.0\.1\,10\.1\.1\.13$}) }
+        it { is_expected.to contain_file(config_file).with_content(%r{^net\.bindIp:  127\.0\.0\.1,10\.1\.1\.13$}) }
       end
 
       describe 'when specifying auth to true' do
@@ -318,6 +334,188 @@ describe 'mongodb::server' do
         end
       end
 
+      describe 'with tls' do
+        context 'enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem'
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$})
+          }
+        end
+
+        context 'disabled' do
+          let :params do
+            {
+              tls: false
+            }
+          end
+
+          it {
+            is_expected.not_to contain_file(config_file).
+              with_content(%r{net\.tls\.mode}).
+              with_content(%r{net\.tls\.certificateKeyFile})
+          }
+        end
+      end
+
+      describe 'with tls and client certificate validation' do
+        context 'enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem',
+              tls_ca: '/etc/ssl/caToValidateClientCertificates.pem'
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$}).
+              with_content(%r{^net\.tls\.CAFile: /etc/ssl/caToValidateClientCertificates.pem$})
+          }
+        end
+
+        context 'client certificate validation disabled but tls enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem'
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$})
+            is_expected.not_to contain_file(config_file).
+              with_content(%r{net\.tls\.CAFile})
+          }
+        end
+
+        context 'disabled' do
+          let :params do
+            {
+              tls: false
+            }
+          end
+
+          it { is_expected.not_to contain_file(config_file).with_content(%r{net\.tls\.CAFile}) }
+        end
+      end
+
+      describe 'with tls, client certificate validation and allow connection without certificates' do
+        context 'enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem',
+              tls_ca: '/etc/ssl/caToValidateClientCertificates.pem',
+              tls_conn_without_cert: true
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$}).
+              with_content(%r{^net\.tls\.CAFile: /etc/ssl/caToValidateClientCertificates.pem$}).
+              with_content(%r{^net\.tls\.allowConnectionsWithoutCertificates: true$})
+          }
+        end
+
+        context 'connection without certificates disabled but tls and client certificate validation enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem',
+              tls_ca: '/etc/ssl/caToValidateClientCertificates.pem',
+              tls_conn_without_cert: false
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$}).
+              with_content(%r{net\.tls\.CAFile})
+            is_expected.not_to contain_file(config_file).
+              with_content(%r{net\.tls\.allowConnectionsWithoutCertificates:\s*true})
+          }
+        end
+
+        context 'disabled' do
+          let :params do
+            {
+              tls: false
+            }
+          end
+
+          it { is_expected.not_to contain_file(config_file).with_content(%r{net\.tls\.allowConnectionsWithoutCertificates:\s*true}) }
+        end
+      end
+
+      describe 'with tls and allow invalid hostnames' do
+        context 'enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem',
+              tls_invalid_hostnames: true
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$}).
+              with_content(%r{^net\.tls\.allowInvalidHostnames: true$})
+          }
+        end
+
+        context 'disallow invalid hostnames but tls enabled' do
+          let :params do
+            {
+              tls: true,
+              tls_mode: 'requireTLS',
+              tls_key: '/etc/ssl/mongodb.pem',
+              tls_invalid_hostnames: false
+            }
+          end
+
+          it {
+            is_expected.to contain_file(config_file).
+              with_content(%r{^net\.tls\.mode: requireTLS$}).
+              with_content(%r{^net\.tls\.certificateKeyFile: /etc/ssl/mongodb.pem$})
+            is_expected.not_to contain_file(config_file).
+              with_content(%r{net\.tls\.allowInvalidHostnames:\s*true})
+          }
+        end
+
+        context 'disabled' do
+          let :params do
+            {
+              tls: false
+            }
+          end
+
+          it { is_expected.not_to contain_file(config_file).with_content(%r{net\.tls\.allowInvalidHostnames:\s*true}) }
+        end
+      end
+
       context 'setting nohttpinterface' do
         it "isn't set when undef" do
           is_expected.not_to contain_file(config_file).with_content(%r{net\.http\.enabled})
@@ -330,6 +528,7 @@ describe 'mongodb::server' do
 
           it { is_expected.to contain_file(config_file).with_content(%r{^net\.http\.enabled: false$}) }
         end
+
         describe 'sets net.http.enabled to true when false' do
           let(:params) do
             { nohttpinterface: false }
@@ -341,7 +540,7 @@ describe 'mongodb::server' do
 
       context 'when setting up replicasets' do
         describe 'should setup using replset_config' do
-          let(:rsConf) do
+          let(:rsConf) do # rubocop:disable RSpec/VariableName
             {
               'rsTest' => {
                 'members' => [
@@ -365,10 +564,10 @@ describe 'mongodb::server' do
         end
 
         describe 'should setup using replset_members' do
-          let(:rsConf) do
+          let(:rsConf) do # rubocop:disable RSpec/VariableName
             {
               'rsTest' => {
-                'ensure'  => 'present',
+                'ensure' => 'present',
                 'members' => [
                   'mongo1:27017',
                   'mongo2:27017',

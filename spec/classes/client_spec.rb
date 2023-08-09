@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'mongodb::client' do
@@ -7,7 +9,12 @@ describe 'mongodb::client' do
 
       context 'with defaults' do
         it { is_expected.to compile.with_all_deps }
-        it { is_expected.to create_package('mongodb_client').with_ensure('present') }
+
+        if facts[:os]['release']['major'] =~ %r{(10)}
+          it { is_expected.to create_package('mongodb_client').with_ensure('4.4.8') }
+        else
+          it { is_expected.to create_package('mongodb_client').with_ensure('present') }
+        end
       end
 
       context 'with manage_package' do
@@ -16,7 +23,12 @@ describe 'mongodb::client' do
         end
 
         it { is_expected.to compile.with_all_deps }
-        it { is_expected.to create_package('mongodb_client').with_ensure('present').with_name('mongodb-org-shell').with_tag('mongodb_package') }
+
+        if facts[:os]['release']['major'] =~ %r{(10)}
+          it { is_expected.to create_package('mongodb_client').with_ensure('4.4.8').with_name('mongodb-org-shell').with_tag('mongodb_package') }
+        else
+          it { is_expected.to create_package('mongodb_client').with_ensure('present').with_name('mongodb-org-shell').with_tag('mongodb_package') }
+        end
       end
     end
   end

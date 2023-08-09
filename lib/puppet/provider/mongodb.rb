@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', '..'))
 require 'puppet/util/mongodb_output'
 
@@ -31,10 +33,14 @@ class Puppet::Provider::Mongodb < Puppet::Provider
       'bindip' => config['net.bindIp'],
       'port' => config['net.port'],
       'ipv6' => config['net.ipv6'],
-      'allowInvalidHostnames' => config['net.ssl.allowInvalidHostnames'],
+      'sslallowInvalidHostnames' => config['net.ssl.allowInvalidHostnames'],
       'ssl' => config['net.ssl.mode'],
       'sslcert' => config['net.ssl.PEMKeyFile'],
       'sslca' => config['net.ssl.CAFile'],
+      'tlsallowInvalidHostnames' => config['net.tls.allowInvalidHostnames'],
+      'tls' => config['net.tls.mode'],
+      'tlscert' => config['net.tls.certificateKeyFile'],
+      'tlsca' => config['net.tls.CAFile'],
       'auth' => config['security.authorization'],
       'shardsvr' => config['sharding.clusterRole'],
       'confsvr' => config['sharding.clusterRole']
@@ -52,9 +58,20 @@ class Puppet::Provider::Mongodb < Puppet::Provider
     !ssl_mode.nil? && ssl_mode != 'disabled'
   end
 
+  def self.tls_is_enabled(config = nil)
+    config ||= mongo_conf
+    tls_mode = config.fetch('tls')
+    !tls_mode.nil? && tls_mode != 'disabled'
+  end
+
   def self.ssl_invalid_hostnames(config = nil)
     config ||= mongo_conf
-    config['allowInvalidHostnames']
+    config['sslallowInvalidHostnames']
+  end
+
+  def self.tls_invalid_hostnames(config = nil)
+    config ||= mongo_conf
+    config['tlsallowInvalidHostnames']
   end
 
   def self.mongo_cmd(db, host, cmd)
@@ -62,7 +79,6 @@ class Puppet::Provider::Mongodb < Puppet::Provider
 
     args = [db, '--quiet', '--host', host]
     args.push('--ipv6') if ipv6_is_enabled(config)
-    args.push('--sslAllowInvalidHostnames') if ssl_invalid_hostnames(config)
 
     if ssl_is_enabled(config)
       args.push('--ssl')
@@ -70,6 +86,18 @@ class Puppet::Provider::Mongodb < Puppet::Provider
 
       ssl_ca = config['sslca']
       args += ['--sslCAFile', ssl_ca] unless ssl_ca.nil?
+
+      args.push('--sslAllowInvalidHostnames') if ssl_invalid_hostnames(config)
+    end
+
+    if tls_is_enabled(config)
+      args.push('--tls')
+      args += ['--tlsCertificateKeyFile', config['tlscert']]
+
+      tls_ca = config['tlsca']
+      args += ['--tlsCAFile', tls_ca] unless tls_ca.nil?
+
+      args.push('--tlsAllowInvalidHostnames') if tls_invalid_hostnames(config)
     end
 
     args += ['--eval', cmd]
@@ -84,7 +112,7 @@ class Puppet::Provider::Mongodb < Puppet::Provider
       ip_real = case first_ip_in_list
                 when '0.0.0.0'
                   Facter.value(:fqdn)
-                when %r{\[?::0\]?}
+                when %r{\[?::0\]?} # rubocop:disable Lint/DuplicateBranch
                   Facter.value(:fqdn)
                 else
                   first_ip_in_list
@@ -111,7 +139,7 @@ class Puppet::Provider::Mongodb < Puppet::Provider
     cmd_ismaster = 'db.isMaster().ismaster'
     cmd_ismaster = mongorc_file + cmd_ismaster if mongorc_file
     db = 'admin'
-    res = mongo_cmd(db, conn_string, cmd_ismaster).to_s.chomp
+    res = mongo_cmd(db, conn_string, cmd_ismaster).to_s.split(%r{\n}).last.chomp
     res.eql?('true')
   end
 
@@ -137,18 +165,16 @@ class Puppet::Provider::Mongodb < Puppet::Provider
             else
               mongo_cmd(db, conn_string, cmd)
             end
-    rescue => e
+    rescue StandardError => e
       retry_count -= 1
-      if retry_count > 0
+      if retry_count.positive?
         Puppet.debug "Request failed: '#{e.message}' Retry: '#{retries - retry_count}'"
         sleep retry_sleep
         retry
       end
     end
 
-    unless out
-      raise Puppet::ExecutionFailure, "Could not evaluate MongoDB shell command: #{cmd}"
-    end
+    raise Puppet::ExecutionFailure, "Could not evaluate MongoDB shell command: #{cmd}" unless out
 
     Puppet::Util::MongodbOutput.sanitize(out)
   end
@@ -182,5 +208,14 @@ class Puppet::Provider::Mongodb < Puppet::Provider
 
   def mongo_4?
     self.class.mongo_4?
+  end
+
+  def self.mongo_5?
+    v = mongo_version
+    !v[%r{^5\.}].nil?
+  end
+
+  def mongo_5?
+    self.class.mongo_5?
   end
 end
