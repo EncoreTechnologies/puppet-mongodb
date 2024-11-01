@@ -182,4 +182,13 @@ class mongodb::server::config {
       mode    => '0600',
     }
   }
+
+  if $auth {
+    exec { 'enable-mongodb-auth':
+      command => 'sed -i \'s/#security.authorization: enabled/security.authorization:/g\' /etc/mongod.conf',
+      unless  => 'grep "^security.authorization: enabled" /etc/mongod.conf',
+      require => Exec['create-mongodb-admin'],
+      notify  => Service['mongodb'],
+    }
+  }
 }

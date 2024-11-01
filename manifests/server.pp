@@ -107,7 +107,7 @@ class mongodb::server (
   contain mongodb::server::service
 
   if ($ensure == 'present' or $ensure == true) {
-    Class['mongodb::server::install'] -> Class['mongodb::server::create_admin'] -> Class['mongodb::server::config']
+    Class['mongodb::server::install'] -> Class['mongodb::server::config'] -> Class['mongodb::server::service']
 
     if $restart {
       # If $restart is true, notify the service on config changes (~>)
