@@ -107,7 +107,7 @@ class mongodb::server (
   contain mongodb::server::service
 
   if ($ensure == 'present' or $ensure == true) {
-    Class['mongodb::server::install'] -> Class['mongodb::server::config']
+    Class['mongodb::server::install'] -> Class['mongodb::server::create_admin'] -> Class['mongodb::server::config']
 
     if $restart {
       # If $restart is true, notify the service on config changes (~>)
@@ -120,22 +120,8 @@ class mongodb::server (
     Class['mongodb::server::service'] -> Class['mongodb::server::config'] -> Class['mongodb::server::install']
   }
 
-  $admin_password_unsensitive = if $admin_password =~ Sensitive[String] {
-    $admin_password.unwrap
-  } else {
-    $admin_password
-  }
   if $create_admin and ($service_ensure == 'running' or $service_ensure == true) {
-    mongodb::db { 'admin':
-      user            => $admin_username,
-      auth_mechanism  => $admin_auth_mechanism,
-      password        => $admin_password_unsensitive,
-      roles           => $admin_roles,
-      update_password => $admin_update_password,
-    }
-
-    # Make sure it runs before other DB creation
-    Mongodb::Db['admin'] -> Mongodb::Db <| title != 'admin' |>
+    include mongodb::server::create_admin
   }
 
   # Set-up replicasets
